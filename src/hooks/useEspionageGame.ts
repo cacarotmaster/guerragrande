@@ -79,7 +79,7 @@ export const useEspionageGame = () => {
       id: 'cipher-2',
       type: 'cipher',
       question: 'Mensaje interceptado en código Morse convertido a texto:',
-      code: '--- .--. . .-. .- - .. --- -.   -. --- -.-. - ..- .-. -. .-',
+      code: '--- .--. . .-. .- -.-. .. --- -.   -. --- -.-. - ..- .-. -. .-',
       answer: 'OPERACION NOCTURNA',
       hint: 'Este es código Morse: --- = O, .--. = P, . = E, etc.',
       difficulty: 3

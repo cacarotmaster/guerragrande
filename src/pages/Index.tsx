@@ -1,328 +1,288 @@
-import React, { useState } from 'react';
-// Misiones (cada una acepta onComplete)
-import InfantryMission from '../components/InfantryMission';
+import React, { useEffect, useRef, useState } from 'react';
+// Misiones de La Gran Guerra (todas aceptan onComplete)
 import SarajevoMission from '../components/SarajevoMission';
+import InfantryMission from '../components/InfantryMission';
 import SommeBattleMission from '../components/SommeBattleMission';
-import AerialCombatMission from '../components/AerialCombatMission';
 import EspionageMission from '../components/EspionageMission';
+import AerialCombatMission from '../components/AerialCombatMission';
 import WarNurseMission from '../components/WarNurseMission';
 
-interface RoleDef {
-  id: string;
-  name: string;
-  icon: string;
-  desc: string;
-  path: string[]; // ids de misiones requeridas para llegar al final
-}
+// Roles disponibles (sabor narrativo; la campaña es secuencial para todos)
+const ROLES = [
+  { id: 'infantry',    icon: '🪖', name: 'Soldado de Infantería' },
+  { id: 'pilot',       icon: '✈️', name: 'Piloto de Combate' },
+  { id: 'intelligence',icon: '🕵️', name: 'Oficial de Inteligencia' },
+  { id: 'nurse',       icon: '🚑', name: 'Enfermera de Guerra' },
+  { id: 'factory',     icon: '🏭', name: 'Trabajador de Fábrica' },
+  { id: 'diplomat',    icon: '🎩', name: 'Diplomático' },
+] as const;
 
-type Phase = 'start' | 'role' | 'board' | 'play' | 'final';
-
-interface MissionDef {
-  id: string;
-  title: string;
-  icon: string;
-  historical: string;
-  desc: string;
-}
-
-const ROLES: RoleDef[] = [
-  { id: 'infantry', name: 'Soldado de Infantería', icon: '🪖', desc: 'Lucha en las trincheras y vive las campañas.', path: ['sarajevo-1914', 'infantry-mission', 'somme-battle'] },
-  { id: 'pilot', name: 'Piloto de Combate', icon: '✈️', desc: 'Enfrenta dogfights sobre Flandes.', path: ['sarajevo-1914', 'aerial-combat'] },
-  { id: 'intelligence', name: 'Oficial de Inteligencia', icon: '🕵️', desc: 'Espionaje y decodificación enemiga.', path: ['sarajevo-1914', 'espionage-mission'] },
-  { id: 'nurse', name: 'Enfermera de Guerra', icon: '⚕️', desc: 'Salva vidas en el hospital de campaña.', path: ['sarajevo-1914', 'war-nurse-mission'] },
-  { id: 'factory', name: 'Trabajador de Fábrica', icon: '🏭', desc: 'El esfuerzo bélico desde la industria.', path: ['sarajevo-1914', 'somme-battle', 'war-nurse-mission'] },
-  { id: 'diplomat', name: 'Diplomático', icon: '🎩', desc: 'Negocia y evita la escalada del conflicto.', path: ['sarajevo-1914', 'espionage-mission'] },
+// CAMPAÑA SECUENCIAL: Sarajevo primero; se desbloquea una a una en orden.
+const CAMPAIGN: {
+  id: string; Comp: React.ComponentType<{ onComplete?: (r: { success: boolean; score: number; label: string }) => void }>;
+  title: string; icon: string; desc: string; time: number;
+}[] = [
+  { id: 'sarajevo-1914',    Comp: SarajevoMission,     title: 'Sarajevo, 1914',          icon: '🚗', time: 120, desc: 'Protege al Archiduque en el momento que cambió la historia.' },
+  { id: 'infantry-mission', Comp: InfantryMission,     title: 'Asalto a las Trincheras', icon: '🪖', time: 150, desc: 'Toma la dirección del asalto en el frente occidental.' },
+  { id: 'somme-battle',     Comp: SommeBattleMission,  title: 'Batalla de Somme',        icon: '🎖️', time: 120, desc: 'Manda tu escuadra en la ofensiva más sangrienta.' },
+  { id: 'espionage-mission',Comp: EspionageMission,    title: 'Espionaje',               icon: '🕵️', time: 150, desc: 'Infíltrate y descifra los códigos enemigos.' },
+  { id: 'aerial-combat',    Comp: AerialCombatMission, title: 'Combate Aéreo',           icon: '✈️', time: 120, desc: 'Ases de los cielos: domina el duelo aéreo.' },
+  { id: 'war-nurse-mission',Comp: WarNurseMission,     title: 'Hospital de Campaña',     icon: '🚑', time: 120, desc: 'Decide a quién salvar primero en el triaje.' },
 ];
 
-const MISSIONS: MissionDef[] = [
-  { id: 'sarajevo-1914', title: 'Sarajevo, 1914', icon: '🚗', historical: '28 jun 1914 · Sarajevo', desc: 'Protege a la comitiva del Archiduque en el momento que cambió la historia.' },
-  { id: 'infantry-mission', title: 'Asalto a las Trincheras', icon: '🪖', historical: '1 jul 1916 · Somme', desc: 'Lidera tu escuadrón en un asalto táctico bajo fuego enemigo.' },
-  { id: 'somme-battle', title: 'Batalla de Somme', icon: '💥', historical: '1916 · Río Somme', desc: 'Sobrevive a la tierra de nadie y completa objetivos estratégicos.' },
-  { id: 'espionage-mission', title: 'Espionaje y Códigos', icon: '🕵️', historical: '1915-1918 · Líneas enemigas', desc: 'Descifra mensajes secretos y extrae información crucial.' },
-  { id: 'aerial-combat', title: 'Héroes del Aire', icon: '✈️', historical: '1917 · Flandes', desc: 'Duelos aéreos contra los mejores ases enemigos.' },
-  { id: 'war-nurse-mission', title: 'Hospital de Campaña', icon: '⚕️', historical: '1917 · Frente Occidental', desc: 'Gestiona recursos y salva vidas bajo presión extrema.' },
-];
+const MAX_LIVES = 3;
+type Phase = 'start' | 'role' | 'board' | 'play' | 'final' | 'gameover';
+const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-const CLASSROOM = [
-  { label: 'Reflexión · 9-1', url: 'https://classroom.google.com/c/842003150589/a/886984111194' },
-  { label: 'Reflexión · 9-2', url: 'https://classroom.google.com/c/793492637905/a/886984160724' },
-];
-
-const REFLECTION_QUESTIONS = [
-  'La decisión que tomaste en el juego y si resultó acertada.',
-  'Cómo se relaciona tu decisión con lo que ocurrió realmente en la Primera Guerra Mundial.',
-  'Qué lección sobre la guerra, la paz y el valor de la vida puedes aplicar a tu contexto o a Colombia.',
-];
-
-const MISSION_COMPONENTS: Record<string, React.FC<any>> = {
-  'infantry-mission': InfantryMission,
-  'sarajevo-1914': SarajevoMission,
-  'somme-battle': SommeBattleMission,
-  'aerial-combat': AerialCombatMission,
-  'espionage-mission': EspionageMission,
-  'war-nurse-mission': WarNurseMission,
-};
-
-export default function Index() {
+const Index: React.FC = () => {
   const [phase, setPhase] = useState<Phase>('start');
-  const [playerName, setPlayerName] = useState('');
-  const [role, setRole] = useState<RoleDef | null>(null);
-  const [currentMission, setCurrentMission] = useState<MissionDef | null>(null);
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<string>('');
+  const [lives, setLives] = useState(MAX_LIVES);
   const [completed, setCompleted] = useState<string[]>([]);
-  const [results, setResults] = useState<{ missionId: string; label: string; score: number; success: boolean }[]>([]);
+  const [results, setResults] = useState<{ label: string; success: boolean; score: number }[]>([]);
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [remaining, setRemaining] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isPathComplete = (r: RoleDef) => r.path.every((id) => completed.includes(id));
+  const unlocked = completed.length;
+  const allDone = completed.length === CAMPAIGN.length;
+  const roleMeta = ROLES.find((r) => r.id === role);
 
-  const handleCompleteMission = (result: { success: boolean; score: number; label: string }) => {
-    if (!currentMission) return;
-    setCompleted((prev) => (prev.includes(currentMission.id) ? prev : [...prev, currentMission.id]));
-    setResults((prev) => [...prev, { missionId: currentMission.id, label: result.label, score: result.score, success: result.success }]);
-    setCurrentMission(null);
-    setPhase('board');
-  };
+  // Temporizador de la misión activa
+  useEffect(() => {
+    if (phase !== 'play' || !currentId) return;
+    const lim = CAMPAIGN.find((m) => m.id === currentId)?.time ?? 120;
+    timerRef.current = setInterval(() => {
+      setRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          handleTimeout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, currentId]);
 
-  const startOver = () => {
-    setPhase('start');
-    setPlayerName('');
-    setRole(null);
-    setCurrentMission(null);
+  function handleTimeout() {
+    const next = lives - 1;
+    setLives(next);
+    setCurrentId(null);
+    setPhase(next <= 0 ? 'gameover' : 'board');
+  }
+
+  function startCampaign() {
+    setLives(MAX_LIVES);
     setCompleted([]);
     setResults([]);
-  };
+    setCurrentId(null);
+    setPhase('board');
+  }
+
+  function handleComplete(r: { success: boolean; score: number; label: string }) {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (r.success) {
+      setCompleted((d) => (d.includes(currentId!) ? d : [...d, currentId!]));
+      setResults((p) => [...p, r]);
+      setCurrentId(null);
+      setPhase('board');
+    } else {
+      const next = lives - 1;
+      setLives(next);
+      setResults((p) => [...p, r]);
+      setCurrentId(null);
+      setPhase(next <= 0 ? 'gameover' : 'board');
+    }
+  }
+
+  const nowComp = CAMPAIGN.find((m) => m.id === currentId)?.Comp;
 
   return (
-    <div className="min-h-screen bg-war-trench text-war-gold">
-      <div className="container mx-auto px-4 py-6 max-w-6xl">
-        {/* Encabezado */}
-        {phase !== 'start' && (
-          <header className="flex items-center justify-between border-b border-war-gold/30 pb-4 mb-6 flex-wrap gap-2">
-            <div>
-              <h1 className="font-cinzel text-2xl md:text-3xl font-bold text-war-gold">La Gran Guerra: Misión Secreta</h1>
-              <p className="text-war-gold/60 font-crimson text-sm">1914 - 1918 · Una experiencia educativa interactiva</p>
+    <div className="min-h-screen bg-[#12100e] text-[#f5e9d0] font-crimson">
+      <header className="sticky top-0 z-20 border-b border-war-gold/20 bg-[#12100e]/90 backdrop-blur px-4 py-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="font-display text-lg sm:text-xl text-war-gold">La Gran Guerra: Misión Secreta</h1>
+            {roleMeta && <p className="text-xs text-war-gold/60">{roleMeta.icon} {roleMeta.name} · {name}</p>}
+          </div>
+          {(phase === 'board' || phase === 'play') && (
+            <div className="flex items-center gap-3 text-sm" title={`Vidas: ${lives}/${MAX_LIVES}`}>
+              <span>
+                {'❤️'.repeat(Math.max(0, lives))}{'🖤'.repeat(Math.max(0, MAX_LIVES - lives))}
+                <span className="ml-1 text-war-gold/70">×{MAX_LIVES}</span>
+              </span>
             </div>
-            <div className="flex items-center gap-3 text-sm">
-              <span className="text-2xl">{role?.icon}</span>
-              <span className="font-cinzel font-semibold">{role?.name}</span>
-              <span className="text-war-gold/60">·</span>
-              <span className="font-crimson">{playerName || 'Agente'}</span>
-            </div>
-          </header>
-        )}
+          )}
+        </div>
+      </header>
 
-        {/* ===== INICIO: nombre ===== */}
+      <main className="mx-auto max-w-3xl px-4 py-6 pb-24">
         {phase === 'start' && (
-          <div className="min-h-[70vh] flex items-center justify-center">
-            <div className="max-w-2xl mx-auto text-center bg-war-field/40 border border-war-gold/30 rounded-xl p-8 md:p-12 backdrop-blur-sm animate-fade-in">
-              <div className="text-6xl mb-6">🎖️</div>
-              <h2 className="font-cinzel text-4xl md:text-5xl font-bold text-war-gold mb-4">LA GRAN GUERRA</h2>
-              <p className="text-war-gold/80 font-crimson text-lg leading-relaxed mb-6">
-                1914-1918. El mundo se hundió en el primer conflicto global. Asume un rol, supera las misiones
-                de tu camino y honra la memoria de quienes vivieron la guerra.
-              </p>
-              <div className="mb-6">
-                <label className="block text-war-gold/70 font-crimson mb-2">🪪 Nombre de agente (aparece en tu Reporte)</label>
-                <input
-                  value={playerName}
-                  maxLength={40}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="Escribe tu nombre o apodo"
-                  className="w-full max-w-sm mx-auto bg-war-trench border-2 border-war-gold/40 rounded-lg px-4 py-3 text-center text-war-gold placeholder:text-war-gold/40 focus:outline-none focus:border-war-gold"
-                />
-              </div>
-              <button
-                disabled={!playerName.trim()}
-                onClick={() => setPhase('role')}
-                className="war-button text-xl px-12 py-4 battlefield-glow disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Comenzar la Guerra
-              </button>
+          <div className="text-center space-y-6">
+            <div className="text-6xl">🎖️</div>
+            <h2 className="font-display text-3xl text-war-gold">1914 · La Gran Guerra</h2>
+            <p className="text-war-gold/70 max-w-xl mx-auto">
+              Asume un rol, supera la campaña misión a misión y llega hasta el final con tu Reporte de Agente.
+              Tienes <b className="text-war-gold">3 vidas ❤️</b> y cada misión tiene un <b className="text-war-gold">tiempo límite ⏱️</b>.
+              Si pierdes las vidas o agotas el tiempo, tendrás que volver a empezar.
+            </p>
+            <div className="max-w-xs mx-auto">
+              <label className="block text-left text-sm text-war-gold/70 mb-1">Nombre de tu agente</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Escribe tu nombre"
+                className="w-full rounded-lg border border-war-gold/40 bg-black/30 px-4 py-3 text-center text-lg focus:outline-none"
+              />
             </div>
+            <button
+              disabled={!name.trim()}
+              onClick={() => setPhase('role')}
+              className="war-button text-lg px-8 py-3 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Elegir mi rol →
+            </button>
           </div>
         )}
 
-        {/* ===== SELECCIÓN DE ROL ===== */}
         {phase === 'role' && (
-          <div className="animate-fade-in">
-            <div className="text-center mb-8">
-              <h2 className="font-cinzel text-4xl font-bold text-war-gold mb-2">Elige Tu Destino</h2>
-              <p className="text-war-gold/70 font-crimson text-lg">Cada rol define tu camino de misiones hasta el final de la guerra.</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="space-y-5">
+            <h2 className="font-display text-2xl text-war-gold text-center">Elige tu rol en la guerra</h2>
+            <p className="text-war-gold/60 text-center text-sm">Tu rol marca tu función, pero la campaña siempre comienza en Sarajevo 1914 y avanza en orden.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {ROLES.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => { setRole(r); setPhase('board'); }}
-                  className="text-left bg-war-field/40 border-2 border-war-gold/25 hover:border-war-gold rounded-xl p-6 transition-all hover:scale-[1.02]"
-                >
-                  <div className="text-5xl mb-3">{r.icon}</div>
-                  <h3 className="font-cinzel text-xl font-semibold text-war-gold mb-1">{r.name}</h3>
-                  <p className="text-war-gold/70 font-crimson text-sm mb-3">{r.desc}</p>
-                  <div className="text-xs text-war-gold/60">
-                    Ruta: {r.path.map((id) => MISSIONS.find((m) => m.id === id)?.icon).join(' ')}
-                  </div>
+                <button key={r.id} onClick={() => { setRole(r.id); startCampaign(); }}
+                  className="rounded-xl border-2 border-war-gold/30 bg-black/20 p-4 text-center hover:border-war-gold hover:bg-war-gold/10 transition">
+                  <div className="text-4xl mb-2">{r.icon}</div>
+                  <div className="font-display text-war-gold">{r.name}</div>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* ===== TABLÓN DE MISIONES ===== */}
-        {phase === 'board' && role && (
-          <div className="animate-fade-in">
-            <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-              <h2 className="font-cinzel text-3xl font-bold text-war-gold">Tablón de Misiones</h2>
-              <div className="flex gap-3">
-                <button onClick={() => setRole(null)} className="text-war-gold/70 hover:text-war-gold font-crimson text-sm">
-                  ← Cambiar Rol
-                </button>
-              </div>
+        {(phase === 'board' || phase === 'gameover') && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-2xl text-war-gold">🗂️ Tablón de Misiones</h2>
+              <span className="text-xs text-war-gold/60">Completadas {completed.length}/{CAMPAIGN.length}</span>
             </div>
+            <p className="text-sm text-war-gold/60">
+              La campaña avanza <b className="text-war-gold">en orden</b>: supera una misión para desbloquear la siguiente. Vidas restantes: <b className="text-war-gold">{lives}</b>.
+            </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {MISSIONS.map((m) => {
+            {phase === 'gameover' && (
+              <div className="rounded-2xl border-2 border-red-500/60 bg-red-950/30 p-6 text-center space-y-3 animate-pulse">
+                <div className="text-5xl">💀</div>
+                <h3 className="font-display text-2xl text-red-300">Sin vidas · Misión fallida</h3>
+                <p className="text-red-200/80">Has agotado tus vidas o el tiempo. Deberás comenzar la campaña de nuevo desde Sarajevo.</p>
+                <button onClick={startCampaign} className="war-button text-lg px-8 py-3 mt-2">🔁 Volver a empezar</button>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {CAMPAIGN.map((m, i) => {
                 const done = completed.includes(m.id);
-                const inPath = role.path.includes(m.id);
-                const Comp = MISSION_COMPONENTS[m.id];
+                const active = i === unlocked && !done;
+                const locked = !done && !active;
                 return (
-                  <div key={m.id} className={`bg-war-field/40 border rounded-xl p-5 flex flex-col ${done ? 'border-green-500/50' : 'border-war-gold/25'}`}>
-                    <div className="flex items-start justify-between mb-3">
-                      <span className="text-4xl">{m.icon}</span>
-                      {inPath ? (
-                        <span className="text-[11px] bg-war-gold/20 text-war-gold border border-war-gold/40 rounded-full px-2 py-1">Tu ruta</span>
-                      ) : done ? (
-                        <span className="text-[11px] text-green-400">✓ Completada</span>
-                      ) : null}
+                  <div key={m.id}
+                    className={`flex items-center gap-3 rounded-xl border-2 p-3 sm:p-4 transition
+                      ${done ? 'border-green-500/50 bg-green-950/20'
+                        : active ? 'border-war-gold/70 bg-war-gold/10'
+                        : 'border-white/10 bg-black/20 opacity-70'}`}>
+                    <div className="text-3xl">{done ? '✅' : locked ? '🔒' : '▶️'}</div>
+                    <div className="flex-1">
+                      <div className="font-display text-war-gold flex items-center gap-2 flex-wrap">
+                        {m.icon} {m.title}
+                        {done && <span className="text-xs text-green-400 normal-case font-sans">· Completada</span>}
+                        {locked && <span className="text-xs text-white/40 normal-case font-sans">· Bloqueada</span>}
+                      </div>
+                      <p className="text-xs text-war-gold/60">{m.desc}</p>
+                      <p className="text-[11px] text-white/40">⏱️ {fmtTime(m.time)}</p>
                     </div>
-                    <h3 className="font-cinzel text-lg font-semibold text-war-gold mb-1">{m.title}</h3>
-                    <p className="text-war-gold/60 font-crimson text-xs mb-2">{m.historical}</p>
-                    <p className="text-war-gold/80 font-crimson text-sm mb-4 flex-1">{m.desc}</p>
-                    {done ? (
-                      <span className="text-green-400 font-crimson text-sm text-center border border-green-500/50 rounded-lg py-2">✓ Completada</span>
-                    ) : (
-                      <button
-                        onClick={() => { setCurrentMission(m); setPhase('play'); }}
-                        className="war-button py-3"
-                      >
-                        {inPath ? '▶ Jugar (tu ruta)' : '▶ Jugar'}
-                      </button>
+                    {active && (
+                      <button onClick={() => { setCurrentId(m.id); setRemaining(m.time); setPhase('play'); }}
+                        className="war-button text-sm px-4 py-2">Jugar ▶</button>
                     )}
+                    {locked && <span className="text-white/30 text-sm">🔒</span>}
                   </div>
                 );
               })}
             </div>
 
-            <div className="text-center mt-10">
-              {isPathComplete(role) ? (
-                <button onClick={() => setPhase('final')} className="war-button text-2xl px-14 py-5 battlefield-glow animate-pulse">
-                  🏁 Ver Reporte de Agente y terminar
-                </button>
-              ) : (
-                <p className="text-war-gold/60 font-crimson">
-                  Completa tu ruta ({role.icon} {role.name}) para llegar al final de la guerra.
-                  Misiones de tu ruta: {role.path.filter((id) => !completed.includes(id)).length} restante(s).
-                </p>
-              )}
-            </div>
+            {allDone && (
+              <button onClick={() => setPhase('final')} className="w-full war-button text-xl px-6 py-4 mt-4 battlefield-glow">
+                🏁 Ver Reporte de Agente
+              </button>
+            )}
           </div>
         )}
 
-        {/* ===== JUGANDO UNA MISIÓN ===== */}
-        {phase === 'play' && currentMission && role && (() => {
-          const Comp = MISSION_COMPONENTS[currentMission.id];
-          if (!Comp) return <p>Misión no disponible.</p>;
+        {phase === 'play' && currentId && nowComp && (() => {
+          const m = CAMPAIGN.find((x) => x.id === currentId)!;
+          const Comp = m.Comp;
           return (
-            <div className="animate-fade-in">
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <span className="font-cinzel text-xl text-war-gold">{currentMission.icon} {currentMission.title}</span>
-                <button onClick={() => { setCurrentMission(null); setPhase('board'); }} className="text-war-gold/70 hover:text-war-gold font-crimson text-sm">
-                  ← Salir de la misión
-                </button>
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded-xl border border-war-gold/30 bg-black/30 px-4 py-3">
+                <div className="font-display text-war-gold">{m.icon} {m.title}</div>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className={remaining <= 20 ? 'text-red-400 font-bold' : 'text-war-gold/80'}>⏱️ {fmtTime(remaining)}</span>
+                  <span>❤️{Math.max(0, lives)}/{MAX_LIVES}</span>
+                  <button onClick={() => setPhase('board')} className="text-xs text-war-gold/60 underline">← Salir</button>
+                </div>
               </div>
-              <Comp onComplete={handleCompleteMission} />
+              <Comp onComplete={handleComplete} />
             </div>
           );
         })()}
 
-        {/* ===== FINAL: REPORTE DE AGENTE ===== */}
-        {phase === 'final' && role && (
-          <div className="max-w-3xl mx-auto animate-fade-in">
-            <div className="bg-war-field/40 border border-war-gold/30 rounded-xl p-8">
-              <div className="text-center mb-6">
-                <div className="text-5xl mb-2">🪪</div>
-                <h2 className="font-cinzel text-3xl font-bold text-war-gold">REPORTE DE AGENTE</h2>
-                <p className="text-war-gold/70 font-crimson text-sm mt-1">
-                  📋 Muestra este reporte a tu docente (evaluación <b>SABER</b>).
-                </p>
-              </div>
+        {phase === 'final' && (
+          <div className="space-y-5">
+            <div className="text-center">
+              <div className="text-5xl">🏆</div>
+              <h2 className="font-display text-3xl text-war-gold">Reporte de Agente</h2>
+              <p className="text-war-gold/70">{roleMeta?.icon} {roleMeta?.name} · {name}</p>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-war-trench/60 rounded-lg p-3">
-                  <div className="text-xs uppercase tracking-widest text-war-gold/60">Agente</div>
-                  <div className="text-lg font-crimson font-bold text-white truncate">{playerName}</div>
-                </div>
-                <div className="bg-war-trench/60 rounded-lg p-3">
-                  <div className="text-xs uppercase tracking-widest text-war-gold/60">Rol</div>
-                  <div className="text-lg font-crimson font-bold">{role.icon} {role.name}</div>
-                </div>
-                <div className="bg-war-trench/60 rounded-lg p-3">
-                  <div className="text-xs uppercase tracking-widest text-war-gold/60">Misiones</div>
-                  <div className="text-lg font-crimson font-bold">{completed.length}/6</div>
-                </div>
-                <div className="bg-war-trench/60 rounded-lg p-3">
-                  <div className="text-xs uppercase tracking-widest text-war-gold/60">Resultado</div>
-                  <div className="text-lg font-crimson font-bold">{results.filter((r) => r.success).length} victorias</div>
-                </div>
-              </div>
+            <div className="rounded-2xl border-2 border-war-gold/40 bg-black/30 p-5 space-y-3">
+              <h3 className="font-display text-lg text-war-gold">📋 Resultado de la campaña</h3>
+              <ul className="space-y-1 text-sm">
+                {results.map((r, i) => (
+                  <li key={i} className="flex justify-between border-b border-white/10 py-1">
+                    <span>{r.success ? '✅' : '❌'} {r.label}</span>
+                    <span className="text-war-gold/70">{r.score} pts</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-sm text-green-400">Misiones superadas: {completed.length}/{CAMPAIGN.length} · Vidas restantes: {lives}</p>
+            </div>
 
-              {results.length > 0 && (
-                <div className="bg-war-trench/60 rounded-lg p-4 mb-4">
-                  <div className="text-xs uppercase tracking-widest text-war-gold/60 mb-2">Misiones completadas</div>
-                  <div className="space-y-1">
-                    {results.map((r) => (
-                      <div key={r.missionId} className="flex justify-between text-sm font-crimson border-b border-war-gold/10 pb-1">
-                        <span className="text-war-gold/90">{r.label}</span>
-                        <span className={r.success ? 'text-green-400' : 'text-red-400'}>
-                          {r.success ? '✓ ' : '✗ '}{r.score} pts
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Reflexión en Classroom */}
-              <div className="bg-war-trench/60 border border-war-gold/30 rounded-lg p-4 mb-4">
-                <div className="font-cinzel font-semibold text-war-gold mb-2">✍️ Reflexión en Google Classroom</div>
-                <p className="text-war-gold/70 font-crimson text-sm mb-2">
-                  Elige <b>UNA</b> de las experiencias del juego y responde en Classroom (4 puntos · PERIODO 3):
-                </p>
-                <ol className="text-sm text-war-gold/70 font-crimson list-decimal list-inside mb-3 space-y-1">
-                  {REFLECTION_QUESTIONS.map((q, i) => <li key={i}>{q}</li>)}
-                </ol>
-                <div className="flex flex-col gap-2">
-                  {CLASSROOM.map((c) => (
-                    <a key={c.url} href={c.url} target="_blank" rel="noopener noreferrer"
-                      className="w-full bg-war-gold text-war-trench font-bold rounded-lg py-3 text-center transition hover:brightness-110">
-                      📚 Abrir {c.label} ▶
-                    </a>
-                  ))}
-                </div>
-              </div>
-
-              <div className="text-center">
-                <button onClick={startOver} className="war-button text-lg px-8 py-3">
-                  🔄 Jugar de nuevo
-                </button>
+            <div className="rounded-2xl border-2 border-blue-500/40 bg-blue-950/20 p-5 space-y-3">
+              <h3 className="font-display text-lg text-blue-200">📚 Reflexión en Google Classroom</h3>
+              <p className="text-sm text-blue-100/80">Con base en tu recorrido, responde en tu grupo de Ciencias Sociales:</p>
+              <ol className="list-decimal list-inside text-sm text-blue-100/90 space-y-1">
+                <li>La decisión que tomaste en el juego y si resultó acertada.</li>
+                <li>Cómo se relaciona tu decisión con lo que ocurrió realmente en la Primera Guerra Mundial.</li>
+                <li>Qué lección sobre la guerra, la paz y el valor de la vida puedes aplicar a tu contexto o a Colombia.</li>
+              </ol>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <a href="https://classroom.google.com/c/842003150589/a/886984111194" target="_blank" rel="noreferrer"
+                  className="war-button text-center px-4 py-3">9°-1 · Responder en Classroom</a>
+                <a href="https://classroom.google.com/c/793492637905/a/886984160724" target="_blank" rel="noreferrer"
+                  className="war-button text-center px-4 py-3">9°-2 · Responder en Classroom</a>
               </div>
             </div>
+
+            <button onClick={startCampaign} className="w-full war-button px-6 py-3">🔁 Jugar de nuevo</button>
           </div>
         )}
-
-        {/* Pie */}
-        <footer className="text-center mt-10 text-war-gold/50 font-crimson text-xs border-t border-war-gold/10 pt-4">
-          «La Gran Guerra: 1914-1918» — honrando la memoria de quienes sirvieron en el conflicto que cambió el mundo.
-        </footer>
-      </div>
+      </main>
     </div>
   );
-}
+};
+
+export default Index;

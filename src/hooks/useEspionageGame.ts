@@ -61,8 +61,8 @@ export const useEspionageGame = () => {
       id: 'coordinates-1',
       type: 'coordinates',
       question: 'Estas coordenadas marcan la ubicación de un arsenal secreto:',
-      code: '4.15.20.18.5.14.3.8.5.18.1.19',
-      answer: 'DETRENCHES',
+      code: '20.18.9.14.3.8.5.18.1.19',
+      answer: 'TRINCHERAS',
       hint: 'Cada número corresponde a la posición de una letra en el alfabeto',
       difficulty: 2
     },
@@ -152,7 +152,8 @@ export const useEspionageGame = () => {
   const submitAnswer = () => {
     if (!currentChallenge) return;
 
-    const isCorrect = playerAnswer.toUpperCase().trim() === currentChallenge.answer.toUpperCase();
+    const norm = (s: string) => s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const isCorrect = norm(playerAnswer) === norm(currentChallenge.answer);
     
     if (isCorrect) {
       setPlayerStats(prev => ({

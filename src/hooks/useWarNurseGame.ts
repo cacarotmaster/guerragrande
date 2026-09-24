@@ -124,6 +124,25 @@ export const useWarNurseGame = () => {
     }
   }, [gameStats.timeRemaining, gamePhase]);
 
+  // Nueva oleada cuando no quedan pacientes (evita que el hospital se quede 'congelado')
+  useEffect(() => {
+    if (gamePhase !== 'playing' || !gameStarted) return;
+    if (patients.length === 0) {
+      const t = setTimeout(() => {
+        const nextWave = gameStats.currentWave + 1;
+        const np = generatePatients(nextWave);
+        setPatients(np);
+        setGameStats(prev => ({
+          ...prev,
+          currentWave: nextWave,
+          totalPatients: prev.totalPatients + np.length
+        }));
+      }, 3500);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patients.length, gamePhase, gameStarted]);
+
   return {
     gameStats,
     patients,

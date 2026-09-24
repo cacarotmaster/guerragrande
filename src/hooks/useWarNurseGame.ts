@@ -15,7 +15,7 @@ const initialStats: GameStats = {
   patientsLost: 0,
   totalPatients: 0,
   resources: initialResources,
-  timeRemaining: 300,
+  timeRemaining: 100,
   currentWave: 1,
   stress: 0
 };
@@ -95,13 +95,10 @@ export const useWarNurseGame = () => {
     if (!gameStarted || gamePhase !== 'playing') return;
 
     const timer = setInterval(() => {
-      setGameStats(prev => {
-        if (prev.timeRemaining <= 0) {
-          setGamePhase('completed');
-          return prev;
-        }
-        return { ...prev, timeRemaining: prev.timeRemaining - 1 };
-      });
+      setGameStats(prev => ({
+        ...prev,
+        timeRemaining: Math.max(0, prev.timeRemaining - 1)
+      }));
 
       // Update patient conditions
       setPatients(prev => prev.map(patient => {
@@ -119,6 +116,13 @@ export const useWarNurseGame = () => {
 
     return () => clearInterval(timer);
   }, [gameStarted, gamePhase]);
+
+  // Cuando el tiempo llega a 0 se completa la misión
+  useEffect(() => {
+    if (gamePhase === 'playing' && gameStats.timeRemaining === 0) {
+      setGamePhase('completed');
+    }
+  }, [gameStats.timeRemaining, gamePhase]);
 
   return {
     gameStats,

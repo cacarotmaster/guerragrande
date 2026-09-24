@@ -185,10 +185,8 @@ const WarNurseMission: React.FC<WarNurseMissionProps> = ({ onComplete }) => {
                 key={patient.id}
                 patient={patient}
                 onTreat={treatPatient}
-                canTreat={
-                  gameStats.resources.medicine > 0 || 
-                  gameStats.resources.bandages > 0
-                }
+                canTreatMedicine={gameStats.resources.medicine > 0}
+                canTreatBandages={gameStats.resources.bandages > 0}
               />
             ))}
           </div>

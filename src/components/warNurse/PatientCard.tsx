@@ -6,10 +6,11 @@ import { Patient } from '../../types/warNurse';
 interface PatientCardProps {
   patient: Patient;
   onTreat: (patientId: number, treatment: 'medicine' | 'bandages' | 'morphine' | 'blood') => void;
-  canTreat: boolean;
+  canTreatMedicine: boolean;
+  canTreatBandages: boolean;
 }
 
-const PatientCard: React.FC<PatientCardProps> = ({ patient, onTreat, canTreat }) => {
+const PatientCard: React.FC<PatientCardProps> = ({ patient, onTreat, canTreatMedicine, canTreatBandages }) => {
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'critical': return 'border-red-500 bg-red-500/10';
@@ -68,14 +69,14 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, onTreat, canTreat })
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => onTreat(patient.id, 'medicine')}
-          disabled={!canTreat}
+          disabled={!canTreatMedicine}
           className="px-3 py-2 bg-blue-600/20 border border-blue-600/30 rounded text-blue-400 text-sm hover:bg-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Medicina
         </button>
         <button
           onClick={() => onTreat(patient.id, 'bandages')}
-          disabled={!canTreat}
+          disabled={!canTreatBandages}
           className="px-3 py-2 bg-green-600/20 border border-green-600/30 rounded text-green-400 text-sm hover:bg-green-600/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Vendas

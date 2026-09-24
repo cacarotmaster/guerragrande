@@ -27,7 +27,7 @@ const CAMPAIGN: {
   { id: 'somme-battle',     Comp: SommeBattleMission,  title: 'Batalla de Somme',        icon: '🎖️', time: 120, desc: 'Manda tu escuadra en la ofensiva más sangrienta.' },
   { id: 'espionage-mission',Comp: EspionageMission,    title: 'Espionaje',               icon: '🕵️', time: 150, desc: 'Infíltrate y descifra los códigos enemigos.' },
   { id: 'aerial-combat',    Comp: AerialCombatMission, title: 'Combate Aéreo',           icon: '✈️', time: 120, desc: 'Ases de los cielos: domina el duelo aéreo.' },
-  { id: 'war-nurse-mission',Comp: WarNurseMission,     title: 'Hospital de Campaña',     icon: '🚑', time: 120, desc: 'Decide a quién salvar primero en el triaje.' },
+  { id: 'war-nurse-mission',Comp: WarNurseMission,     title: 'Hospital de Campaña',     icon: '🚑', time: 150, desc: 'Decide a quién salvar primero en el triaje.' },
 ];
 
 const MAX_LIVES = 3;

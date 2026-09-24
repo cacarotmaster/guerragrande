@@ -40,6 +40,7 @@ export const useAerialCombat = () => {
     
     const fuelCost = Math.floor(Math.random() * 10) + 5;
     const newStats = { ...playerStats };
+    let allEnemiesDown = false;
     
     switch (maneuver) {
       case 'attack':
@@ -53,11 +54,13 @@ export const useAerialCombat = () => {
             const target = activeEnemies[targetIndex];
             const damage = Math.floor(Math.random() * 40) + 20;
             
-            setEnemies(prev => prev.map(enemy => 
+            const updatedEnemies = enemies.map(enemy => 
               enemy.id === target.id 
                 ? { ...enemy, health: Math.max(0, enemy.health - damage), isActive: enemy.health - damage > 0 }
                 : enemy
-            ));
+            );
+            setEnemies(updatedEnemies);
+            allEnemiesDown = updatedEnemies.every(e => !e.isActive);
             
             newStats.score += damage;
             addToCombatLog(`¡Impacto directo en ${target.name}! Daño: ${damage}`);
@@ -66,6 +69,9 @@ export const useAerialCombat = () => {
               addToCombatLog(`¡${target.name} derribado! +200 puntos`);
               newStats.score += 200;
             }
+          } else {
+            allEnemiesDown = true;
+            addToCombatLog('No quedan objetivos activos en el cielo.');
           }
         } else {
           addToCombatLog('¡Sin munición! Necesitas recargar.');
@@ -102,7 +108,7 @@ export const useAerialCombat = () => {
     setPlayerStats(newStats);
     
     const activeEnemiesCount = enemies.filter(e => e.isActive).length;
-    if (activeEnemiesCount === 0) {
+    if (allEnemiesDown) {
       setGamePhase('victory');
     } else if (newStats.health <= 0 || newStats.fuel <= 0) {
       setGamePhase('defeat');

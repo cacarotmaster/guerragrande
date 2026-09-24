@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useAudioManager } from '../audio/useAudio';
 // Misiones de La Gran Guerra (todas aceptan onComplete)
 import SarajevoMission from '../components/SarajevoMission';
 import InfantryMission from '../components/InfantryMission';
@@ -35,6 +36,7 @@ type Phase = 'start' | 'role' | 'board' | 'play' | 'final' | 'gameover';
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 const Index: React.FC = () => {
+  const audio = useAudioManager();
   const [phase, setPhase] = useState<Phase>('start');
   const [name, setName] = useState('');
   const [role, setRole] = useState<string>('');
@@ -72,6 +74,7 @@ const Index: React.FC = () => {
     setLives(next);
     setCurrentId(null);
     setPhase(next <= 0 ? 'gameover' : 'board');
+    audio.play(next <= 0 ? 'boom' : 'error');
   }
 
   function startCampaign() {
@@ -84,6 +87,7 @@ const Index: React.FC = () => {
 
   function handleComplete(r: { success: boolean; score: number; label: string }) {
     if (timerRef.current) clearInterval(timerRef.current);
+    audio.play(r.success ? 'complete' : 'error');
     if (r.success) {
       setCompleted((d) => (d.includes(currentId!) ? d : [...d, currentId!]));
       setResults((p) => [...p, r]);
@@ -116,6 +120,14 @@ const Index: React.FC = () => {
               </span>
             </div>
           )}
+          <button
+            onClick={audio.toggle}
+            title={audio.enabled ? 'Silenciar' : 'Activar sonido'}
+            aria-label="Sonido"
+            className="text-xl px-2 py-1 rounded-lg border border-war-gold/30 hover:border-war-gold transition"
+          >
+            {audio.enabled ? '🔊' : '🔇'}
+          </button>
         </div>
       </header>
 
